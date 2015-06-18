@@ -128,7 +128,7 @@ def parseSection(sh,row,sections):
 	name,teacher=sh.cell_value(row,0).split('(')
 	name=name.strip().lower()
 	teacher=teacher[:-1].strip()
-	section=sections[name]
+	section=sections.get(name, Section(name=name, coef=0.0))
 	section.teacher=teacher
 	
 	column=0
