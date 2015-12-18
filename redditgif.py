@@ -29,7 +29,8 @@ def main():
 	n = int((sys.argv[1:]+['-1'])[0])
 	for p in readPages(n):
 		print '\n'.join(pageToURLs(p))
+		print >>sys.stderr,'page fetched'
 		if n < 0:
-			print >>sys.stderr, 'page fetched, enter to continue, q to quit'
+			print >>sys.stderr, 'enter to continue, q to quit'
 			if raw_input()=='q': break
 if __name__ == '__main__':main()
