@@ -101,14 +101,13 @@ def stat2():
 	D=defaultdict(list)
 	for date, time in db.execute('''select date, time from time_tracking order by date asc, time asc'''):
 		D[date].append(time)
-	for date in D:
+	for date in sorted(D):
 		dur=len(D[date])*PERIOD
 		h = int(dur/3600.0)
 		dur -= h*3600
 		m = int(dur/60.0)
 		s = int(dur - m*60)
 		print "%s - %02i:%02i:%02i"%(date,h,m,s)
-
 
 def main():
     import sys
