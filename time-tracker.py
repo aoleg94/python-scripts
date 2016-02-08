@@ -173,8 +173,8 @@ def main():
         mainloop()
     elif sys.argv[1:2] in (['-f'], ['--full']):
         stat()
-    elif sys.argv[1:2] in (['-m'], ['--month']):
-        statm(*sys.argv[2:4])
+    elif sys.argv[1:2] in (['-m'], ['--month']): # -m {2|02|201602} {salary per hour}
+        statm(*sys.argv[2:4]) # echo `time-tracker -m | tail -n3 | tr -d ' ' | cut -d- -f2,3 --output-delimiter=' ' | sed -e 's/^ $/|/' `
     elif sys.argv[1:2] in (['-s'], ['--schedule']):
         schedule(*sys.argv[2:3])
     else:
