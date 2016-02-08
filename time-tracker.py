@@ -6,6 +6,7 @@ import sqlite3 as S
 DBPATH="/home/oleg/.local/share/time-tracker/"
 DBFILE=DBPATH+"db"
 PERIOD=5
+SALARY_PER_HOUR_DEFAULT=120
 
 def pslist():
     import os
@@ -102,21 +103,60 @@ def stat2():
 	for date, time in db.execute('''select date, time from time_tracking order by date asc, time asc'''):
 		D[date].append(time)
 	for date in sorted(D):
-		dur=len(D[date])*PERIOD
+		dur = len(D[date])*PERIOD
 		h = int(dur/3600.0)
 		dur -= h*3600
 		m = int(dur/60.0)
 		s = int(dur - m*60)
 		print "%s - %02i:%02i:%02i"%(date,h,m,s)
 
+def statm(yearmonth=None,salary_per_hour=SALARY_PER_HOUR_DEFAULT):
+	from collections import defaultdict
+	import time
+	db = initDB()
+	print 'yyyymmdd - hh:mm:ss - salary'
+	print '----------------------------'
+	D=defaultdict(list)
+	salary_per_hour = int(salary_per_hour)
+	if yearmonth is None:
+		tm = time.localtime()
+		yearmonth = "%04i%02i__" % (tm.tm_year, tm.tm_mon)
+	if len(yearmonth) <= 2:
+		tm = time.localtime()
+		yearmonth = "%04i%02i__" % (tm.tm_year, int(yearmonth))
+	if len(yearmonth) <= 6:
+		yearmonth += "__"
+	for date, time in db.execute('''select date, time from time_tracking where date like ? order by date asc, time asc''', (yearmonth,)):
+		D[date].append(time)
+	dur_sum = 0
+	for date in sorted(D):
+		dur = len(D[date])*PERIOD
+		dur_sum += dur
+		salary = dur/3600.0 * salary_per_hour
+		h = int(dur/3600.0)
+		dur -= h*3600
+		m = int(dur/60.0)
+		s = int(dur - m*60)
+		print "%s - %02i:%02i:%02i - %6i"%(date,h,m,s,salary)
+	print '----------------------------'
+	dur = dur_sum
+	salary = dur/3600.0 * salary_per_hour
+	h = int(dur/3600.0)
+	dur -= h*3600
+	m = int(dur/60.0)
+	s = int(dur - m*60)
+	print "%s - %02i:%02i:%02i - %6i"%(yearmonth,h,m,s,salary)
+
 def main():
     import sys
     if sys.argv[1:2] in (['-d'], ['--daemon']):
         mainloop()
-    if sys.argv[1:2] in (['-s'], ['--summary']):
-	stat2()
-    else:
+    if sys.argv[1:2] in (['-f'], ['--full']):
         stat()
+    if sys.argv[1:2] in (['-m'], ['--month']):
+        statm(*sys.argv[2:4])
+    else:
+        stat2()
 
 if __name__=='__main__':
     main()
