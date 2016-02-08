@@ -34,7 +34,7 @@ def initDB():
     return db
 
 def stampDB(db):
-    args = (time.strftime('%Y%m%d'), time.time())
+    args = (time.strftime('%Y%m%d'), int(time.time()))
     #print 'stamp', args
     db.execute('insert into time_tracking values (?, ?)', args)
     db.commit()
@@ -151,9 +151,9 @@ def main():
     import sys
     if sys.argv[1:2] in (['-d'], ['--daemon']):
         mainloop()
-    if sys.argv[1:2] in (['-f'], ['--full']):
+    elif sys.argv[1:2] in (['-f'], ['--full']):
         stat()
-    if sys.argv[1:2] in (['-m'], ['--month']):
+    elif sys.argv[1:2] in (['-m'], ['--month']):
         statm(*sys.argv[2:4])
     else:
         stat2()
