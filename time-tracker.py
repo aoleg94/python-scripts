@@ -7,6 +7,7 @@ DBPATH="/home/oleg/.local/share/time-tracker/"
 DBFILE=DBPATH+"db"
 PERIOD=5
 SALARY_PER_HOUR_DEFAULT=120
+SALARY_DAY=10
 
 def pslist():
     import os
@@ -120,13 +121,23 @@ def statm(yearmonth=None,salary_per_hour=SALARY_PER_HOUR_DEFAULT):
 	salary_per_hour = int(salary_per_hour)
 	if yearmonth is None:
 		tm = time.localtime()
-		yearmonth = "%04i%02i__" % (tm.tm_year, tm.tm_mon)
-	if len(yearmonth) <= 2:
+		y = tm.tm_year
+		m = tm.tm_mon
+		if tm.tm_mday < SALARY_DAY:
+			m -= 1
+			if m == 0:
+				m = 12
+				y -= 1
+		yearmonth = (y, m)
+	elif len(yearmonth) <= 2:
 		tm = time.localtime()
-		yearmonth = "%04i%02i__" % (tm.tm_year, int(yearmonth))
-	if len(yearmonth) <= 6:
-		yearmonth += "__"
-	for date, time in db.execute('''select date, time from time_tracking where date like ? order by date asc, time asc''', (yearmonth,)):
+		yearmonth = (tm.tm_year, int(yearmonth))
+	elif len(yearmonth) <= 6:
+		yearmonth = (int(yearmonth[:4]), int(yearmonth[4:]))
+	daterange = (
+		time.mktime((yearmonth[0], yearmonth[1]+0, SALARY_DAY, 0,0,0, 0,0,-1)),
+		time.mktime((yearmonth[0], yearmonth[1]+1, SALARY_DAY, 0,0,0, 0,0,-1)))
+	for date, time in db.execute('''select date, time from time_tracking where time between ? and ? order by date asc, time asc''', daterange):
 		D[date].append(time)
 	dur_sum = 0
 	for date in sorted(D):
@@ -145,7 +156,7 @@ def statm(yearmonth=None,salary_per_hour=SALARY_PER_HOUR_DEFAULT):
 	dur -= h*3600
 	m = int(dur/60.0)
 	s = int(dur - m*60)
-	print "%s - %02i:%02i:%02i - %6i"%(yearmonth,h,m,s,salary)
+	print "%04i%02i__ - %02i:%02i:%02i - %6i"%(yearmonth+(h,m,s,salary))
 
 def main():
     import sys
@@ -153,8 +164,8 @@ def main():
         mainloop()
     elif sys.argv[1:2] in (['-f'], ['--full']):
         stat()
-    elif sys.argv[1:2] in (['-m'], ['--month']): # -m {2|02|201602} {salary per hour}
-        statm(*sys.argv[2:4]) # echo `time-tracker -m | tail -n3 | tr -d ' ' | cut -d- -f2,3 --output-delimiter=' ' | sed -e 's/^ $/|/' `
+    elif sys.argv[1:2] in (['-m'], ['--month']):
+        statm(*sys.argv[2:4])
     else:
         stat2()
 
