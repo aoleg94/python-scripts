@@ -47,6 +47,13 @@ def mainloop():
             stampDB(db)
         time.sleep(PERIOD)
 
+def hms(dur):
+	h = int(dur/3600.0)
+	dur -= h*3600
+	m = int(dur/60.0)
+	s = int(dur - m*60)
+	return h,m,s
+
 def stat():
     db = initDB()
     print 'yyyymmdd - hh:mm:ss'
@@ -57,11 +64,7 @@ def stat():
             dur = PERIOD
         else:
             dur = finish.laststop - finish.laststart
-        h = int(dur/3600.0)
-        dur -= h*3600
-        m = int(dur/60.0)
-        s = int(dur - m*60)
-        print "%s - %02i:%02i:%02i"%(finish.lastdate,h,m,s)
+        print "%s - %02i:%02i:%02i"%((finish.lastdate,)+hms(dur))
         finish.laststop = None
         finish.lastdate, finish.laststart = date, time
 
@@ -70,7 +73,6 @@ def stat():
     finish.laststop=None
 
     for date, time in db.execute('''select date, time from time_tracking order by date asc, time asc'''):
-        #print 'azaz',date, time
         if finish.lastdate is None:
             finish.lastdate, finish.laststart = date, time
             finish.laststop = time + PERIOD
@@ -87,13 +89,6 @@ def stat():
         else:
             finish.laststop = time
     finish(None, None)
-    #~ for date,start,stop,dur in db.execute('''select date,min(time),max(time),max(time)-min(time) 
-        #~ from time_tracking group by date;'''):
-        #~ h = int(dur/3600.0)
-        #~ dur -= h*3600
-        #~ m = int(dur/60.0)
-        #~ s = int(dur - m*60)
-        #~ print "%s - %02i:%02i:%02i"%(date,h,m,s)
 
 def stat2():
 	from collections import defaultdict
@@ -105,11 +100,7 @@ def stat2():
 		D[date].append(time)
 	for date in sorted(D):
 		dur = len(D[date])*PERIOD
-		h = int(dur/3600.0)
-		dur -= h*3600
-		m = int(dur/60.0)
-		s = int(dur - m*60)
-		print "%s - %02i:%02i:%02i"%(date,h,m,s)
+		print "%s - %02i:%02i:%02i"%((date,)+hms(dur))
 
 def statm(yearmonth=None,salary_per_hour=SALARY_PER_HOUR_DEFAULT):
 	from collections import defaultdict
@@ -144,19 +135,21 @@ def statm(yearmonth=None,salary_per_hour=SALARY_PER_HOUR_DEFAULT):
 		dur = len(D[date])*PERIOD
 		dur_sum += dur
 		salary = dur/3600.0 * salary_per_hour
-		h = int(dur/3600.0)
-		dur -= h*3600
-		m = int(dur/60.0)
-		s = int(dur - m*60)
-		print "%s - %02i:%02i:%02i - %6i"%(date,h,m,s,salary)
+		print "%s - %02i:%02i:%02i - %6i"%((date,)+hms(dur)+(salary,))
 	print '----------------------------'
 	dur = dur_sum
 	salary = dur/3600.0 * salary_per_hour
-	h = int(dur/3600.0)
-	dur -= h*3600
-	m = int(dur/60.0)
-	s = int(dur - m*60)
-	print "%04i%02i__ - %02i:%02i:%02i - %6i"%(yearmonth+(h,m,s,salary))
+	print "%04i%02i__ - %02i:%02i:%02i - %6i"%(yearmonth+hms(dur)+(salary,))
+
+def schedule(lastN="31"):
+	db = initDB()
+	lastN = int(lastN)
+	print 'yyyymmdd - hh:mm:ss - hh:mm:ss - hh:mm:ss'
+	print '-----------------------------------------'
+	for date, mintime, maxtime, count in db.execute('''select date, min(time), max(time), count(time) from time_tracking group by date order by date desc limit ?''', (lastN,)):
+		mintime = (mintime - time.timezone) % 86400
+		maxtime = (maxtime - time.timezone) % 86400
+		print "%s - %02i:%02i:%02i - %02i:%02i:%02i - %02i:%02i:%02i"%((date,)+hms(mintime)+hms(maxtime)+hms(count*PERIOD))
 
 def main():
     import sys
@@ -166,6 +159,8 @@ def main():
         stat()
     elif sys.argv[1:2] in (['-m'], ['--month']):
         statm(*sys.argv[2:4])
+    elif sys.argv[1:2] in (['-s'], ['--schedule']):
+		schedule(*sys.argv[2:3])
     else:
         stat2()
 
