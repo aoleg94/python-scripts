@@ -166,6 +166,17 @@ def schedule(lastN="31"):
         maxtime = (maxtime - time.timezone) % 86400
         print "%s - %02i:%02i:%02i - %02i:%02i:%02i - %02i:%02i:%02i"%(
             (date,)+hms(mintime)+hms(maxtime)+hms(count*PERIOD))
+    print '-----------------------------------------'
+    mintime, maxtime, count = [], [], []
+    for mi, ma, co in db.execute('''
+        select min(time) as mi, max(time) as ma, count(time) as co
+            from time_tracking group by date 
+            order by date desc limit ?''', (lastN,)):
+        mintime.append(mi); maxtime.append(ma); count.append(co)
+    mintime, maxtime = map(lambda L: sum((x - time.timezone)%86400 for x in L)/len(L) if L else 0, (mintime, maxtime))
+    count = sum(count)/len(count) if count else 0
+    print "     avg - %02i:%02i:%02i - %02i:%02i:%02i - %02i:%02i:%02i"%(
+        hms(mintime)+hms(maxtime)+hms(count*PERIOD))
 
 def main():
     import sys
