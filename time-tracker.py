@@ -153,7 +153,7 @@ def statm(yearmonth=None,salary_per_hour=SALARY_PER_HOUR_DEFAULT):
     print "%04i%02i__ - %02i:%02i:%02i - %6i"%(
         yearmonth+hms(dur)+(salary,))
 
-def schedule(lastN="31"):
+def schedule(lastN="31",salary_per_hour=SALARY_PER_HOUR_DEFAULT):
     db = initDB()
     lastN = int(lastN)
     print 'yyyymmdd - hh:mm:ss - hh:mm:ss - hh:mm:ss'
@@ -171,12 +171,46 @@ def schedule(lastN="31"):
     for mi, ma, co in db.execute('''
         select min(time) as mi, max(time) as ma, count(time) as co
             from time_tracking group by date 
-            order by date desc limit ?''', (lastN,)):
+            order by date desc limit ? offset 1''', (lastN,)):
         mintime.append(mi); maxtime.append(ma); count.append(co)
     mintime, maxtime = map(lambda L: sum((x - time.timezone)%86400 for x in L)/len(L) if L else 0, (mintime, maxtime))
     count = sum(count)/len(count) if count else 0
-    print "     avg - %02i:%02i:%02i - %02i:%02i:%02i - %02i:%02i:%02i"%(
-        hms(mintime)+hms(maxtime)+hms(count*PERIOD))
+    def approx_salary(avg_hours):
+		from time import mktime, timezone, localtime
+		from collections import defaultdict
+		tm = localtime()
+		y = tm.tm_year
+		m = tm.tm_mon
+		if tm.tm_mday < SALARY_DAY:
+			m -= 1
+			if m == 0:
+				m = 12
+				y -= 1
+		yearmonth = (y, m)
+		daterange = (
+			mktime(
+				(yearmonth[0], yearmonth[1]+0, SALARY_DAY, 0,0,0, 0,0,-1)),
+			mktime(
+				(yearmonth[0], yearmonth[1]+1, SALARY_DAY, 0,0,0, 0,0,-1))) # wraps in mktime
+		lasttime = None
+		D=defaultdict(int)
+		for date, time in db.execute('''
+			select date, time from time_tracking 
+				where time between ? and ? 
+				order by date asc, time asc''', daterange):
+			D[date] += 1
+			lasttime = time
+		dur = sum(D.itervalues())*PERIOD
+		salary_real = dur/3600.0 * salary_per_hour
+		daterange = (
+			lasttime - lasttime%86400 + timezone,
+			mktime(
+				(yearmonth[0], yearmonth[1]+1, SALARY_DAY, 0,0,0, 0,0,-1))) # wraps in mktime
+		days_left = (daterange[1] - daterange[0])/86400
+		salary_left = days_left * avg_hours * salary_per_hour
+		return salary_real + salary_left
+    print "     AVG - %02i:%02i:%02i - %02i:%02i:%02i - %02i:%02i:%02i - %i"%(
+        hms(mintime)+hms(maxtime)+hms(count*PERIOD)+(approx_salary(count*PERIOD/3600.0),))
 
 def main():
     import sys
@@ -187,7 +221,7 @@ def main():
     elif sys.argv[1:2] in (['-m'], ['--month']): # -m {2|02|201602} {salary per hour}
         statm(*sys.argv[2:4]) # echo `time-tracker -m | tail -n3 | tr -d ' ' | cut -d- -f2,3 --output-delimiter=' ' | sed -e 's/^ $/|/' `
     elif sys.argv[1:2] in (['-s'], ['--schedule']):
-        schedule(*sys.argv[2:3])
+        schedule(*sys.argv[2:4])
     else:
         stat2()
 
