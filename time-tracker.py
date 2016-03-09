@@ -7,7 +7,7 @@ DBPATH="/home/oleg/.local/share/time-tracker/"
 DBFILE=DBPATH+"db"
 PERIOD=5
 SALARY_PER_HOUR_DEFAULT=120
-SALARY_DAY=10
+SALARY_DAY=1
 
 def pslist():
     import os
@@ -61,37 +61,41 @@ def stat():
     print 'yyyymmdd - hh:mm:ss'
     print '-------------------'
 
-    def finish(date, time):
+    def finish(date, time_):
         if finish.laststop is None:
             dur = PERIOD
         else:
             dur = finish.laststop - finish.laststart
-        print "%s - %02i:%02i:%02i"%((finish.lastdate,)+hms(dur))
+        print "%s - %02i:%02i:%02i - %02i:%02i:%02i - %02i:%02i:%02i"%(
+        (finish.lastdate,)+
+        hms(dur)+
+        hms(finish.laststart%86400-time.timezone)+
+        hms(finish.laststop%86400-time.timezone))
         finish.laststop = None
-        finish.lastdate, finish.laststart = date, time
+        finish.lastdate, finish.laststart = date, time_
 
     finish.lastdate=None
     finish.laststart=None
     finish.laststop=None
 
-    for date, time in db.execute('''
+    for date, time_ in db.execute('''
         select date, time from time_tracking 
             order by date asc, time asc'''):
         if finish.lastdate is None:
-            finish.lastdate, finish.laststart = date, time
-            finish.laststop = time + PERIOD
+            finish.lastdate, finish.laststart = date, time_
+            finish.laststop = time_ + PERIOD
             continue
         if date != finish.lastdate:
-            finish(date, time)
+            finish(date, time_)
             continue
         if finish.laststop is None:
-            finish.laststop = time
-        if time - finish.laststop > 2*PERIOD:
+            finish.laststop = time_
+        if time_ - finish.laststop > 2*PERIOD:
             finish(date, time)
-            finish.laststart = time
+            finish.laststart = time_
             finish.laststop = None
         else:
-            finish.laststop = time
+            finish.laststop = time_
     finish(None, None)
 
 def stat2():
@@ -212,6 +216,30 @@ def schedule(lastN="31",salary_per_hour=SALARY_PER_HOUR_DEFAULT):
     print "     AVG - %02i:%02i:%02i - %02i:%02i:%02i - %02i:%02i:%02i - %i"%(
         hms(mintime)+hms(maxtime)+hms(count*PERIOD)+(approx_salary(count*PERIOD/3600.0),))
 
+def parse_time(s, date=None):
+	if date is None:
+		d = int(time.time()/86400)*86400+time.timezone
+	else:
+		d = time.mktime(time.strptime(date, '%Y%m%d'))
+
+	h,m,s = (map(int, s.split(':'))+[0,0])[0:3]
+	t = ((h*60 + m)*60 + s)/PERIOD*PERIOD
+	return time.strftime('%Y%m%d', time.localtime(d)), t+d
+
+def add_time(from_, to, date=None):
+	date, a = parse_time(from_, date)
+	date, b = parse_time(to, date)
+	db = initDB()
+	db.executemany('insert into time_tracking values (?, ?)', ((date, t) for t in xrange(int(a), int(b)+PERIOD, PERIOD)))
+	db.commit()
+
+def del_time(from_, to, date=None):
+	date, a = parse_time(from_, date)
+	date, b = parse_time(to, date)
+	db = initDB()
+	db.execute('delete from time_tracking where time between ? and ?', (a,b))
+	db.commit()
+
 def main():
     import sys
     if sys.argv[1:2] in (['-d'], ['--daemon']):
@@ -222,6 +250,10 @@ def main():
         statm(*sys.argv[2:4]) # echo `time-tracker -m | tail -n3 | tr -d ' ' | cut -d- -f2,3 --output-delimiter=' ' | sed -e 's/^ $/|/' `
     elif sys.argv[1:2] in (['-s'], ['--schedule']):
         schedule(*sys.argv[2:4])
+    elif sys.argv[1:2] in (['-a'], ['--add']):
+		add_time(*sys.argv[2:5])
+    elif sys.argv[1:2] in (['-r'], ['--remove']):
+		del_time(*sys.argv[2:5])
     else:
         stat2()
 
