@@ -6,7 +6,7 @@ import sqlite3 as S
 DBPATH="/home/oleg/.local/share/time-tracker/"
 DBFILE=DBPATH+"db"
 PERIOD=5
-SALARY_PER_HOUR_DEFAULT=120
+SALARY_PER_HOUR_DEFAULT=130
 SALARY_DAY=1
 
 def pslist():
@@ -180,65 +180,118 @@ def schedule(lastN="31",salary_per_hour=SALARY_PER_HOUR_DEFAULT):
     mintime, maxtime = map(lambda L: sum((x - time.timezone)%86400 for x in L)/len(L) if L else 0, (mintime, maxtime))
     count = sum(count)/len(count) if count else 0
     def approx_salary(avg_hours):
-		from time import mktime, timezone, localtime
-		from collections import defaultdict
-		tm = localtime()
-		y = tm.tm_year
-		m = tm.tm_mon
-		if tm.tm_mday < SALARY_DAY:
-			m -= 1
-			if m == 0:
-				m = 12
-				y -= 1
-		yearmonth = (y, m)
-		daterange = (
-			mktime(
-				(yearmonth[0], yearmonth[1]+0, SALARY_DAY, 0,0,0, 0,0,-1)),
-			mktime(
-				(yearmonth[0], yearmonth[1]+1, SALARY_DAY, 0,0,0, 0,0,-1))) # wraps in mktime
-		lasttime = None
-		D=defaultdict(int)
-		for date, time in db.execute('''
-			select date, time from time_tracking 
-				where time between ? and ? 
-				order by date asc, time asc''', daterange):
-			D[date] += 1
-			lasttime = time
-		dur = sum(D.itervalues())*PERIOD
-		salary_real = dur/3600.0 * salary_per_hour
-		daterange = (
-			lasttime - lasttime%86400 + timezone,
-			mktime(
-				(yearmonth[0], yearmonth[1]+1, SALARY_DAY, 0,0,0, 0,0,-1))) # wraps in mktime
-		days_left = (daterange[1] - daterange[0])/86400
-		salary_left = days_left * avg_hours * salary_per_hour
-		return salary_real + salary_left
+        from time import mktime, timezone, localtime
+        from collections import defaultdict
+        tm = localtime()
+        y = tm.tm_year
+        m = tm.tm_mon
+        if tm.tm_mday < SALARY_DAY:
+            m -= 1
+            if m == 0:
+                m = 12
+                y -= 1
+        yearmonth = (y, m)
+        daterange = (
+            mktime(
+                (yearmonth[0], yearmonth[1]+0, SALARY_DAY, 0,0,0, 0,0,-1)),
+            mktime(
+                (yearmonth[0], yearmonth[1]+1, SALARY_DAY, 0,0,0, 0,0,-1))) # wraps in mktime
+        lasttime = None
+        D=defaultdict(int)
+        for date, time in db.execute('''
+            select date, time from time_tracking 
+                where time between ? and ? 
+                order by date asc, time asc''', daterange):
+            D[date] += 1
+            lasttime = time
+        dur = sum(D.itervalues())*PERIOD
+        salary_real = dur/3600.0 * salary_per_hour
+        daterange = (
+            lasttime - lasttime%86400 + timezone,
+            mktime(
+                (yearmonth[0], yearmonth[1]+1, SALARY_DAY, 0,0,0, 0,0,-1))) # wraps in mktime
+        days_left = (daterange[1] - daterange[0])/86400
+        salary_left = days_left * avg_hours * salary_per_hour
+        return salary_real + salary_left
     print "     AVG - %02i:%02i:%02i - %02i:%02i:%02i - %02i:%02i:%02i - %i"%(
         hms(mintime)+hms(maxtime)+hms(count*PERIOD)+(approx_salary(count*PERIOD/3600.0),))
 
 def parse_time(s, date=None):
-	if date is None:
-		d = int(time.time()/86400)*86400+time.timezone
-	else:
-		d = time.mktime(time.strptime(date, '%Y%m%d'))
+    if date is None:
+        d = int(time.time()/86400)*86400+time.timezone
+    else:
+        d = time.mktime(time.strptime(date, '%Y%m%d'))
 
-	h,m,s = (map(int, s.split(':'))+[0,0])[0:3]
-	t = ((h*60 + m)*60 + s)/PERIOD*PERIOD
-	return time.strftime('%Y%m%d', time.localtime(d)), t+d
+    h,m,s = (map(int, s.split(':'))+[0,0])[0:3]
+    t = ((h*60 + m)*60 + s)/PERIOD*PERIOD
+    return time.strftime('%Y%m%d', time.localtime(d)), t+d
 
 def add_time(from_, to, date=None):
-	date, a = parse_time(from_, date)
-	date, b = parse_time(to, date)
-	db = initDB()
-	db.executemany('insert into time_tracking values (?, ?)', ((date, t) for t in xrange(int(a), int(b)+PERIOD, PERIOD)))
-	db.commit()
+    date, a = parse_time(from_, date)
+    date, b = parse_time(to, date)
+    db = initDB()
+    db.executemany('insert into time_tracking values (?, ?)', ((date, t) for t in xrange(int(a), int(b)+PERIOD, PERIOD)))
+    db.commit()
 
 def del_time(from_, to, date=None):
-	date, a = parse_time(from_, date)
-	date, b = parse_time(to, date)
-	db = initDB()
-	db.execute('delete from time_tracking where time between ? and ?', (a,b))
-	db.commit()
+    date, a = parse_time(from_, date)
+    date, b = parse_time(to, date)
+    db = initDB()
+    db.execute('delete from time_tracking where time between ? and ?', (a,b))
+    db.commit()
+    
+def bar(salary_per_hour=SALARY_PER_HOUR_DEFAULT):
+    from collections import defaultdict
+    import time
+    db = initDB()
+    D=defaultdict(list)
+    salary_per_hour = int(salary_per_hour)
+    tm = time.localtime()
+    y = tm.tm_year
+    m = tm.tm_mon
+    if tm.tm_mday < SALARY_DAY:
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+    yearmonth = (y, m)
+    daterange0 = (
+        time.mktime(
+            (yearmonth[0], yearmonth[1]-1, SALARY_DAY, 0,0,0, 0,0,-1)),
+        time.mktime(
+            (yearmonth[0], yearmonth[1]-0, SALARY_DAY, 0,0,0, 0,0,-1)))
+    daterange1 = (
+        time.mktime(
+            (yearmonth[0], yearmonth[1]+0, SALARY_DAY, 0,0,0, 0,0,-1)),
+        time.mktime(
+            (yearmonth[0], yearmonth[1]+1, SALARY_DAY, 0,0,0, 0,0,-1)))
+
+    stamps = db.execute('''
+        select count(time) from time_tracking 
+            where date = ?''', (time.strftime('%Y%m%d'),)).fetchone()[0]
+    dur_sum = PERIOD*stamps
+    salary = dur_sum/3600.0 * salary_per_hour
+    print "%02i:%02i:%02i %i"%(hms(dur_sum)+(salary,)),
+          
+    D.clear()
+    for date, time in db.execute('''
+        select date, time from time_tracking 
+            where time between ? and ? 
+            order by date asc, time asc''', daterange1):
+        D[date].append(time)
+    dur_sum = sum(PERIOD*len(x) for x in D.itervalues())
+    salary = dur_sum/3600.0 * salary_per_hour
+    print "| %02i:%02i:%02i %i"%(hms(dur_sum)+(salary,)),
+    
+    D.clear()
+    for date, time in db.execute('''
+        select date, time from time_tracking 
+            where time between ? and ? 
+            order by date asc, time asc''', daterange0):
+        D[date].append(time)
+    dur_sum = sum(PERIOD*len(x) for x in D.itervalues())
+    salary = dur_sum/3600.0 * salary_per_hour
+    print "| %i"%(salary)
 
 def main():
     import sys
@@ -251,9 +304,11 @@ def main():
     elif sys.argv[1:2] in (['-s'], ['--schedule']):
         schedule(*sys.argv[2:4])
     elif sys.argv[1:2] in (['-a'], ['--add']):
-		add_time(*sys.argv[2:5])
+        add_time(*sys.argv[2:5])
     elif sys.argv[1:2] in (['-r'], ['--remove']):
-		del_time(*sys.argv[2:5])
+        del_time(*sys.argv[2:5])
+    elif sys.argv[1:2] in (['-b'], ['--bar']):
+        bar(*sys.argv[2:3])
     else:
         stat2()
 
